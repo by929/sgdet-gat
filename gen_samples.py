@@ -105,7 +105,7 @@ def generate_node_batch(img_nodes, feat_file):
 
 # 批量生成
 if __name__ == '__main__':
-	topk = 5
+	topk = 6
 	mode = 'train'
 	# mode = 'train'
 	raw_data_path = '../{}/{}_feat_relabel'.format(mode, mode)
