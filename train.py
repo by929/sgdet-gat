@@ -140,7 +140,7 @@ if __name__ == '__main__':
                     # nfeat=features.shape[1],
                     nhid=args.hidden, 
                     # nclass=int(labels.max()) + 1, 
-                    nclass=2,
+                    nclass=151,
                     dropout=args.dropout, 
                     nheads=args.nb_heads, 
                     alpha=args.alpha)
@@ -149,7 +149,7 @@ if __name__ == '__main__':
                     # nfeat=features.shape[1],
                     nhid=args.hidden, 
                     # nclass=int(labels.max()) + 1, 
-                    nclass=2, 
+                    nclass=151, 
                     dropout=args.dropout, 
                     nheads=args.nb_heads, 
                     alpha=args.alpha)
