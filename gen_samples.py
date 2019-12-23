@@ -47,7 +47,7 @@ def generate_edge(topk, img_id):
 	boxes_dis_sort = boxes_dis.argsort(1)[:, :topk]
 	for i in range(boxes_dis_sort.shape[0]):
 		for j in boxes_dis_sort[i][1:]:
-			edge_file.write(str(i+boxes_start_id) + ' ' + str(j+boxes_start_id) + '\n')
+			edge_file.write(str(j+boxes_start_id) + ' ' + str(i+boxes_start_id) + '\n')
 
 def generate_node(img_id):
 	test_path = '../test/test_feat_relabel2/vg_test_0-1000_feat_relabel2.txt'
@@ -97,7 +97,7 @@ def generate_edge_batch(boxes, boxes_start_id, edge_file, topk):
 	boxes_dis_sort = boxes_dis.argsort(1)[:, :topk]
 	for i in range(boxes_dis_sort.shape[0]):
 		for j in boxes_dis_sort[i][1:]:	# 去掉节点本身
-			edge_file.write(str(i+boxes_start_id) + ' ' + str(j+boxes_start_id) + '\n')
+			edge_file.write(str(j+boxes_start_id) + ' ' + str(i+boxes_start_id) + '\n')
 
 def generate_node_batch(img_nodes, feat_file):
 	for line in img_nodes:
