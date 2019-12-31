@@ -177,7 +177,11 @@ if __name__ == '__main__':
                     # nfeat=features.shape[1],
                     nhid=args.hidden, 
                     # nclass=int(labels.max()) + 1, 
+<<<<<<< HEAD
                     nclass=label_dim,
+=======
+                    nclass=151,
+>>>>>>> origin/master
                     dropout=args.dropout, 
                     nheads=args.nb_heads, 
                     alpha=args.alpha)
@@ -186,7 +190,11 @@ if __name__ == '__main__':
                     # nfeat=features.shape[1],
                     nhid=args.hidden, 
                     # nclass=int(labels.max()) + 1, 
+<<<<<<< HEAD
                     nclass=label_dim, 
+=======
+                    nclass=151, 
+>>>>>>> origin/master
                     dropout=args.dropout, 
                     nheads=args.nb_heads, 
                     alpha=args.alpha)
@@ -243,4 +251,11 @@ if __name__ == '__main__':
 
     # Restore best model
     print('Loading {}th epoch'.format(best_epoch))
+<<<<<<< HEAD
     model.load_state_dict(torch.load('{}.pkl'.format(best_epoch)))
+=======
+    model.load_state_dict(torch.load('{}.pkl'.format(best_epoch)))
+
+    # Testing
+    compute_test()
+>>>>>>> origin/master

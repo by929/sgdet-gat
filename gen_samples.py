@@ -113,7 +113,11 @@ def generate_node_batch(img_nodes, feat_file):
 # 批量生成
 if __name__ == '__main__':
 	topk = 6
+<<<<<<< HEAD
 	mode = 'test'
+=======
+	mode = 'train'
+>>>>>>> origin/master
 	# mode = 'train'
 	raw_data_path = '../{}/{}_feat_relabel'.format(mode, mode)
 	raw_data_filenames = generate_filenames(mode, 0)
@@ -163,6 +167,7 @@ if __name__ == '__main__':
 			
 			img_boxes.append(line)
 			img_nodes.append(str(box_id) + ' ' + line)
+<<<<<<< HEAD
 			box_id += 1
 
 		if len(img_boxes) > 0 and len(img_nodes) > 0:
@@ -174,3 +179,6 @@ if __name__ == '__main__':
 			img_boxes.clear()
 			img_nodes.clear()
 			boxes_start_id = box_id
+=======
+			box_id += 1	
+>>>>>>> origin/master
