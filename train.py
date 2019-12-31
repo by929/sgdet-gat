@@ -15,9 +15,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
+import torch.utils.data as Data
 
 from utils import load_data, accuracy, evaluation_train, evaluation_test
 from models import GAT, SpGAT
+from mydataset import MyDataset, generate_filenames
+
 
 # Training settings
 def MyParser():
@@ -42,15 +45,41 @@ def MyParser():
     torch.manual_seed(args.seed)
     if args.cuda:
         torch.cuda.manual_seed(args.seed)
-
     return args
 
-def train(epoch):
+
+def sample_training(labels, idx_train):
+    idx_train_bg = []
+    idx_train_nobg = []
+    for idx in idx_train:
+        if labels[idx] == 0:
+            idx_train_bg.append(idx)
+        else:
+            idx_train_nobg.append(idx)
+    idx_train_bg = np.array(idx_train_bg)
+    idx_train_nobg = np.array(idx_train_nobg)
+    np.random.shuffle(idx_train_bg)
+    idx_train_sample = np.hstack([idx_train_nobg, idx_train_bg[:len(idx_train_nobg)]])
+    return idx_train_sample
+
+
+def train(epoch, pos_weight = None, batch_size = 100):
     t = time.time()
     model.train()
+
+    train_feat_files, train_edge_files = generate_filenames('train')
+    train_dataset = MyDataset('train', train_feat_files, train_edge_files)
     
-    for i in range(0, 1000, 100):
-        adj, features, labels, idx_train = load_dataset('train', i)
+    train_iter = Data.DataLoader(dataset = train_dataset, batch_size = 1)
+    img_num = 1000
+    train_output = None
+    train_labels = None
+
+    for img_id, (x, y) in enumerate(train_iter):
+        # print(img_id)
+        x = x[0].numpy()
+        y = y[0].numpy()
+        adj, features, labels, idx_train = load_data(x, y)
 
         if args.cuda:
             features = features.cuda()
@@ -60,96 +89,104 @@ def train(epoch):
 
         features, adj, labels = Variable(features), Variable(adj), Variable(labels)
         output = model(features, adj)
+        idx_train = sample_training(labels, idx_train)
 
-        pos_weight = torch.ones([2])
-        pos_weight[1] = 10
-        loss_train = F.nll_loss(output[idx_train], labels[idx_train], weight=pos_weight)
+        if train_output is None:
+            train_output = output[idx_train]
+            train_labels = labels[idx_train]
+        else:
+            train_output = torch.cat((train_output, output[idx_train]), 0)
+            train_labels = torch.cat((train_labels, labels[idx_train]), 0)
 
-        loss_data = loss_train.data.item()
-        # acc_train = accuracy(output[idx_train], labels[idx_train])
-        acc_train, recall_bg, recall_nobg, precision_bg, precision_nobg \
-                    = evaluation_train(output[idx_train], labels[idx_train])
+        if (img_id+1) % batch_size == 0 or (img_id+1) == img_num:
+            if pos_weight is None:
+                loss_train = F.nll_loss(train_output, train_labels)
+            else:
+                loss_train = F.nll_loss(train_output, train_labels, weight=pos_weight)
+            
+            loss_data = loss_train.data.item()
+            acc_train, recall_bg, recall_nobg, precision_bg, precision_nobg \
+                        = evaluation_train(train_output, train_labels)
+            
+            optimizer.zero_grad()
+            loss_train.backward()
+            optimizer.step()
+            train_output = None
+            train_labels = None
 
-        optimizer.zero_grad()
-        loss_train.backward()
-        optimizer.step()
-
-        print('Epoch: {:04d}'.format(epoch+1),
-              'loss_train: {:.6f}'.format(loss_train.data.item()),
-              'acc_train: {:.6f}'.format(acc_train.data.item()),
-              'recall_bg: {:.6f}'.format(recall_bg.data.item()),
-              'recall_nobg: {:.6f}'.format(recall_nobg.data.item()),
-              'precision_bg: {:.6f}'.format(precision_bg.data.item()),
-              'precision_nobg: {:.6f}'.format(precision_nobg.data.item()),
-              'time: {:.4f}s'.format(time.time() - t))
-
+            print('Epoch: {:04d}'.format(epoch+1),
+                  'loss_train: {:.6f}'.format(loss_data),
+                  'acc_train: {:.6f}'.format(acc_train.data.item()),
+                  'recall_bg: {:.6f}'.format(recall_bg.data.item()),
+                  'recall_nobg: {:.6f}'.format(recall_nobg.data.item()),
+                  'precision_bg: {:.6f}'.format(precision_bg.data.item()),
+                  'precision_nobg: {:.6f}'.format(precision_nobg.data.item()),
+                  'time: {:.4f}s'.format(time.time() - t))
     return loss_data
 
-
-def compute_test():
+def compute_test(epoch, pos_weight = None):
     model.eval()
-    preds_test = torch.ones(1)
-    labels_test = torch.ones(1)
 
-    for i in range(0, 1000, 100):
-        adj, features, labels, idx_test = load_dataset('test', 0)
+    test_feat_files, test_edge_files = generate_filenames('test')
+    test_dataset = MyDataset('test', test_feat_files, test_edge_files)
+
+    test_iter = Data.DataLoader(dataset = test_dataset, batch_size = 1)
+    test_output = None
+    test_labels = None
+
+    for _, (x, y) in enumerate(test_iter):
+        x = x[0].numpy()
+        y = y[0].numpy()
+        adj, features, labels, idx_test = load_data(x, y)
+
+        if args.cuda:
+            features = features.cuda()
+            adj = adj.cuda()
+            labels = labels.cuda()
+            idx_test = idx_test.cuda()
 
         output = model(features, adj)
-        pos_weight = torch.ones([2])
-        pos_weight[1] = 10
-        loss_test = F.nll_loss(output[idx_test], labels[idx_test], weight = pos_weight)
-        acc_test = accuracy(output[idx_test], labels[idx_test])
-        
         preds = output[idx_test].max(1)[1].type_as(labels)
-        preds_test = preds_test.type_as(labels)
-        labels_test = labels_test.type_as(labels)
-        preds_test = torch.cat([preds_test, preds])
-        labels_test = torch.cat([labels_test, labels[idx_test]])
-
-        print("Test set results:",
-              "loss= {:.4f}".format(loss_test.data[0]),
-              "accuracy= {:.4f}".format(acc_test.data[0]))
+        if test_output is None:
+            test_output = preds
+            test_labels = labels[idx_test]
+        else:
+            test_output = torch.cat((test_output, preds), 0)
+            test_labels = torch.cat((test_labels, labels[idx_test]), 0)
 
     acc_test, recall_bg, recall_nobg, precision_bg, precision_nobg \
-                    = evaluation_test(preds_test[1:], labels_test[1:])
-    print('acc_test: {:.6f}'.format(acc_test.data.item()),
-              'recall_bg: {:.6f}'.format(recall_bg.data.item()),
-              'recall_nobg: {:.6f}'.format(recall_nobg.data.item()),
-              'precision_bg: {:.6f}'.format(precision_bg.data.item()),
-              'precision_nobg: {:.6f}'.format(precision_nobg.data.item()))
-
-
-def load_dataset(mode, start_i):
-    dirpath = './data/{}'.format(mode)
-    edge_path = '{}_gat_edge'.format(mode)
-    feat_path = '{}_gat_feat'.format(mode)
-    feat_file = 'vg_{}_{}-{}_gat_feat.txt'.format(mode, start_i, start_i+100)
-    edge_file = 'vg_{}_{}-{}_gat_edge.txt'.format(mode, start_i, start_i+100)
-    adj, features, labels, idx = load_data( \
-        dirpath = dirpath, feat_path = feat_path, edge_path = edge_path, \
-        feat_file = feat_file, edge_file = edge_file)
-    return adj, features, labels, idx
+                    = evaluation_test(test_output, test_labels)
+    
+    print('Epoch: {:04d}'.format(epoch+1),
+          'acc_test: {:.6f}'.format(acc_test.data.item()),
+          'recall_bg: {:.6f}'.format(recall_bg.data.item()),
+          'recall_nobg: {:.6f}'.format(recall_nobg.data.item()),
+          'precision_bg: {:.6f}'.format(precision_bg.data.item()),
+          'precision_nobg: {:.6f}'.format(precision_nobg.data.item()))
 
 
 if __name__ == '__main__':
     args = MyParser()
 
     # Model and optimizer
+    feat_dim = 4251-4-151
+    label_dim = 151
+
     if args.sparse:
-        model = SpGAT(nfeat=4251, 
+        model = SpGAT(nfeat=feat_dim, 
                     # nfeat=features.shape[1],
                     nhid=args.hidden, 
                     # nclass=int(labels.max()) + 1, 
-                    nclass=2,
+                    nclass=label_dim,
                     dropout=args.dropout, 
                     nheads=args.nb_heads, 
                     alpha=args.alpha)
     else:
-        model = GAT(nfeat=4251, 
+        model = GAT(nfeat=feat_dim, 
                     # nfeat=features.shape[1],
                     nhid=args.hidden, 
                     # nclass=int(labels.max()) + 1, 
-                    nclass=2, 
+                    nclass=label_dim, 
                     dropout=args.dropout, 
                     nheads=args.nb_heads, 
                     alpha=args.alpha)
@@ -166,10 +203,17 @@ if __name__ == '__main__':
     bad_counter = 0
     best = args.epochs + 1
     best_epoch = 0
-    
-    # for epoch in range(args.epochs):
-    for epoch in range(10):
-        loss_values.append(train(epoch))
+
+    pos_weight = torch.ones([label_dim]) * 15
+    pos_weight[0] = 1
+    # pos_weight = None
+
+    for epoch in range(args.epochs):
+    # for epoch in range(10):
+        loss_values.append(train(epoch, pos_weight))
+
+        # Testing
+        compute_test(epoch, pos_weight)
 
         torch.save(model.state_dict(), '{}.pkl'.format(epoch))
         if loss_values[-1] < best:
@@ -200,6 +244,3 @@ if __name__ == '__main__':
     # Restore best model
     print('Loading {}th epoch'.format(best_epoch))
     model.load_state_dict(torch.load('{}.pkl'.format(best_epoch)))
-
-    # Testing
-    compute_test()
